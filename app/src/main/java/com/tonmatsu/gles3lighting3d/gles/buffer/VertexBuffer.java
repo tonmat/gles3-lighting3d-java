@@ -28,7 +28,7 @@ public class VertexBuffer {
     public void unbind() {
         if (binded == null)
             return;
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, GL_NONE);
         binded = null;
     }
 

@@ -25,7 +25,7 @@ public class VertexArray {
     public void unbind() {
         if (binded == null)
             return;
-        glBindVertexArray(0);
+        glBindVertexArray(GL_NONE);
         binded = null;
     }
 

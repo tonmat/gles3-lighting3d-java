@@ -37,7 +37,7 @@ public class ShaderProgram {
     public void unbind() {
         if (binded == null)
             return;
-        glUseProgram(0);
+        glUseProgram(GL_NONE);
         binded = null;
     }
 
@@ -85,6 +85,16 @@ public class ShaderProgram {
             uniformsLocations.put(name, location);
         }
         return location;
+    }
+
+    public void setUniform1b(String name, boolean x) {
+        bind();
+        glUniform1i(getUniformLocation(name), x ? GL_TRUE : GL_FALSE);
+    }
+
+    public void setUniform1i(String name, int x) {
+        bind();
+        glUniform1i(getUniformLocation(name), x);
     }
 
     public void setUniform1f(String name, float x) {

@@ -28,7 +28,7 @@ public class IndexBuffer {
     public void unbind() {
         if (binded == null)
             return;
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_NONE);
         binded = null;
     }
 

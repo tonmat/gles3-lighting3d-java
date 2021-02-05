@@ -19,6 +19,8 @@ import org.joml.Vector3f;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
+import static android.opengl.GLES20.glDeleteFramebuffers;
+import static android.opengl.GLES20.glDeleteTextures;
 import static android.opengl.GLES31.GL_BLEND;
 import static android.opengl.GLES31.GL_COLOR_ATTACHMENT0;
 import static android.opengl.GLES31.GL_COLOR_ATTACHMENT1;
@@ -264,7 +266,7 @@ public class Demo {
         gaussianBlurShader.bind();
         vao2.bind();
         ibo2.bind();
-        for (int i = 0; i < 32; i++) {
+        for (int i = 0; i < 10; i++) {
             final int horizontal = i % 2;
             glBindFramebuffer(GL_FRAMEBUFFER, gbFramebuffers[horizontal]);
             gaussianBlurShader.setUniform1i("u_horizontal", horizontal);
@@ -308,6 +310,11 @@ public class Demo {
         vao2.dispose();
         ibo2.dispose();
         vbo2.dispose();
+        glDeleteFramebuffers(gbFramebuffers.length, gbFramebuffers, 0);
+        glDeleteTextures(gbTextures.length, gbTextures, 0);
+        glDeleteFramebuffers(1, new int[]{hdrFB}, 0);
+        glDeleteTextures(1, new int[]{colorTexture}, 0);
+        glDeleteTextures(1, new int[]{bloomTexture}, 0);
         AssetUtil.dispose();
     }
 

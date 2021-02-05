@@ -13,5 +13,4 @@ void main() {
     color += texture(u_bloom, v_texCoords).rgb;
     color = vec3(1.0) - exp(-color * 4.0);
     f_color = vec4(pow(color, vec3(1.0 / 2.2)), 1.0);
-//    f_color = texture(u_bloom, v_texCoords);
 }

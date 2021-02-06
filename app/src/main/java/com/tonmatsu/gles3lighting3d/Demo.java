@@ -11,36 +11,6 @@ import org.joml.*;
 
 import java.nio.*;
 
-import static android.opengl.GLES20.glReadPixels;
-import static android.opengl.GLES20.*;
-import static android.opengl.GLES31.GL_COLOR_ATTACHMENT0;
-import static android.opengl.GLES31.GL_COLOR_BUFFER_BIT;
-import static android.opengl.GLES31.GL_CULL_FACE;
-import static android.opengl.GLES31.GL_FLOAT;
-import static android.opengl.GLES31.GL_FRAMEBUFFER;
-import static android.opengl.GLES31.GL_NEAREST;
-import static android.opengl.GLES31.GL_NONE;
-import static android.opengl.GLES31.GL_RGBA;
-import static android.opengl.GLES31.GL_TEXTURE0;
-import static android.opengl.GLES31.GL_TEXTURE1;
-import static android.opengl.GLES31.GL_TEXTURE_2D;
-import static android.opengl.GLES31.GL_TEXTURE_MAG_FILTER;
-import static android.opengl.GLES31.GL_TEXTURE_MIN_FILTER;
-import static android.opengl.GLES31.GL_TRIANGLES;
-import static android.opengl.GLES31.GL_UNSIGNED_INT;
-import static android.opengl.GLES31.glActiveTexture;
-import static android.opengl.GLES31.glBindFramebuffer;
-import static android.opengl.GLES31.glBindTexture;
-import static android.opengl.GLES31.glClear;
-import static android.opengl.GLES31.glClearColor;
-import static android.opengl.GLES31.glDrawElements;
-import static android.opengl.GLES31.glEnable;
-import static android.opengl.GLES31.glFramebufferTexture2D;
-import static android.opengl.GLES31.glGenFramebuffers;
-import static android.opengl.GLES31.glGenTextures;
-import static android.opengl.GLES31.glTexImage2D;
-import static android.opengl.GLES31.glTexParameteri;
-import static android.opengl.GLES31.glViewport;
 import static android.opengl.GLES31.*;
 import static com.tonmatsu.gles3lighting3d.util.BufferUtil.*;
 import static org.joml.Math.*;
@@ -73,7 +43,8 @@ public class Demo {
     private IntBuffer indices2;
     private FloatBuffer vertices2;
 
-    private FloatBuffer pixels;
+    private PixelPackBuffer pbo;
+
     private float exposure;
 
     private int[] gbFramebuffers = new int[2];
@@ -158,8 +129,6 @@ public class Demo {
                 .put(-1).put(+1)/**/.put(0).put(0);
         vertices2.flip();
 
-        pixels = allocateFloatBuffer(3);
-
         demoShader = new ShaderProgram();
         demoShader.attachShader(ShaderType.VERTEX, "shaders/demo-vs.glsl");
         demoShader.attachShader(ShaderType.FRAGMENT, "shaders/demo-fs.glsl");
@@ -195,6 +164,9 @@ public class Demo {
         ibo2.unbind();
         vbo2.unbind();
 
+        pbo = new PixelPackBuffer(16);
+        pbo.unbind();
+
         for (int i = 0; i < 2; i++) {
             gbFramebuffers[i] = createFramebuffer();
             gbTextures[i] = createTexture();
@@ -210,7 +182,6 @@ public class Demo {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloomTexture, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
 
-        glClearColor(0, 0, 0, 0);
         glEnable(GL_CULL_FACE);
     }
 
@@ -239,6 +210,15 @@ public class Demo {
         vao.bind();
         demoShader.setUniformMatrix4f("u_projection", projection);
         demoShader.setUniform3f("u_light", light.mulProject(view, lightV));
+
+        {
+            model.identity().scale(5, 10, 1).translate(0, 0, -5f).translate(-0.5f, -0.5f, -0.5f);
+            modelview.set(view).mul(model);
+            demoShader.setUniformMatrix4f("u_modelview", modelview);
+            demoShader.setUniformMatrix3f("u_normal", modelview.normal(normal));
+            demoShader.setUniform3f("u_color", 0.01f, 0.01f, 0.01f);
+            glDrawElements(GL_TRIANGLES, indices.limit(), GL_UNSIGNED_INT, 0);
+        }
 
         {
             model.identity().rotateXYZ(rotation).scale(0.2f).translate(-0.5f, -0.5f, -0.5f);
@@ -270,14 +250,23 @@ public class Demo {
         vao.unbind();
         demoShader.unbind();
 
-        pixels.clear();
-        glReadPixels(width / 2, height / 2, 1, 1, GL_RGB, GL_FLOAT, pixels);
+        //
+
+        pbo.bind();
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glReadPixels(width / 2, height / 2, 1, 1, GL_RGBA, GL_FLOAT, 0);
+        final FloatBuffer pixels = ((ByteBuffer) glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 16, GL_MAP_READ_BIT))
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
         final float r = pixels.get();
         final float g = pixels.get();
         final float b = pixels.get();
+        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        pbo.unbind();
+
         final float brightness = r * 0.2125f + g * 0.7154f + b * 0.0721f;
         final float newExposure = 1.0f / max(brightness, 0.3f);
         exposure = exposure + (newExposure - exposure) * delta * 10;
+        pbo.unbind();
 
         glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
 

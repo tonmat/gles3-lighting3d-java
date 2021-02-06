@@ -1,41 +1,26 @@
 package com.tonmatsu.gles3lighting3d;
 
-import android.content.Context;
+import android.content.*;
 
-import com.tonmatsu.gles3lighting3d.gles.array.VertexArray;
-import com.tonmatsu.gles3lighting3d.gles.array.VertexAttribute;
-import com.tonmatsu.gles3lighting3d.gles.array.VertexAttributeLayout;
-import com.tonmatsu.gles3lighting3d.gles.buffer.BufferUsage;
-import com.tonmatsu.gles3lighting3d.gles.buffer.IndexBuffer;
-import com.tonmatsu.gles3lighting3d.gles.buffer.VertexBuffer;
-import com.tonmatsu.gles3lighting3d.gles.shader.ShaderProgram;
-import com.tonmatsu.gles3lighting3d.gles.shader.ShaderType;
-import com.tonmatsu.gles3lighting3d.util.AssetUtil;
+import com.tonmatsu.gles3lighting3d.gles.array.*;
+import com.tonmatsu.gles3lighting3d.gles.buffer.*;
+import com.tonmatsu.gles3lighting3d.gles.shader.*;
+import com.tonmatsu.gles3lighting3d.util.*;
 
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
-import org.joml.Vector3f;
+import org.joml.*;
 
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
+import java.nio.*;
 
-import static android.opengl.GLES20.glDeleteFramebuffers;
-import static android.opengl.GLES20.glDeleteTextures;
-import static android.opengl.GLES31.GL_BLEND;
+import static android.opengl.GLES20.glReadPixels;
+import static android.opengl.GLES20.*;
 import static android.opengl.GLES31.GL_COLOR_ATTACHMENT0;
-import static android.opengl.GLES31.GL_COLOR_ATTACHMENT1;
 import static android.opengl.GLES31.GL_COLOR_BUFFER_BIT;
 import static android.opengl.GLES31.GL_CULL_FACE;
-import static android.opengl.GLES31.GL_DEPTH_BUFFER_BIT;
-import static android.opengl.GLES31.GL_DEPTH_TEST;
 import static android.opengl.GLES31.GL_FLOAT;
 import static android.opengl.GLES31.GL_FRAMEBUFFER;
 import static android.opengl.GLES31.GL_NEAREST;
 import static android.opengl.GLES31.GL_NONE;
-import static android.opengl.GLES31.GL_ONE_MINUS_SRC_ALPHA;
 import static android.opengl.GLES31.GL_RGBA;
-import static android.opengl.GLES31.GL_RGBA16F;
-import static android.opengl.GLES31.GL_SRC_ALPHA;
 import static android.opengl.GLES31.GL_TEXTURE0;
 import static android.opengl.GLES31.GL_TEXTURE1;
 import static android.opengl.GLES31.GL_TEXTURE_2D;
@@ -46,10 +31,8 @@ import static android.opengl.GLES31.GL_UNSIGNED_INT;
 import static android.opengl.GLES31.glActiveTexture;
 import static android.opengl.GLES31.glBindFramebuffer;
 import static android.opengl.GLES31.glBindTexture;
-import static android.opengl.GLES31.glBlendFunc;
 import static android.opengl.GLES31.glClear;
 import static android.opengl.GLES31.glClearColor;
-import static android.opengl.GLES31.glDrawBuffers;
 import static android.opengl.GLES31.glDrawElements;
 import static android.opengl.GLES31.glEnable;
 import static android.opengl.GLES31.glFramebufferTexture2D;
@@ -58,11 +41,14 @@ import static android.opengl.GLES31.glGenTextures;
 import static android.opengl.GLES31.glTexImage2D;
 import static android.opengl.GLES31.glTexParameteri;
 import static android.opengl.GLES31.glViewport;
-import static com.tonmatsu.gles3lighting3d.util.BufferUtil.allocateFloatBuffer;
-import static com.tonmatsu.gles3lighting3d.util.BufferUtil.allocateIntBuffer;
+import static android.opengl.GLES31.*;
+import static com.tonmatsu.gles3lighting3d.util.BufferUtil.*;
+import static org.joml.Math.*;
 
 public class Demo {
     private final Context context;
+    private int width;
+    private int height;
     private final Matrix4f projection = new Matrix4f();
     private final Matrix4f view = new Matrix4f();
     private final Matrix4f model = new Matrix4f();
@@ -86,6 +72,9 @@ public class Demo {
     private VertexBuffer vbo2;
     private IntBuffer indices2;
     private FloatBuffer vertices2;
+
+    private FloatBuffer pixels;
+    private float exposure;
 
     private int[] gbFramebuffers = new int[2];
     private int[] gbTextures = new int[2];
@@ -169,6 +158,8 @@ public class Demo {
                 .put(-1).put(+1)/**/.put(0).put(0);
         vertices2.flip();
 
+        pixels = allocateFloatBuffer(3);
+
         demoShader = new ShaderProgram();
         demoShader.attachShader(ShaderType.VERTEX, "shaders/demo-vs.glsl");
         demoShader.attachShader(ShaderType.FRAGMENT, "shaders/demo-fs.glsl");
@@ -220,13 +211,12 @@ public class Demo {
         glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
 
         glClearColor(0, 0, 0, 0);
-        glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
     public void resize(int width, int height) {
+        this.width = width;
+        this.height = height;
         glViewport(0, 0, width, height);
         projection.setPerspective(1.2f, (float) width / height, 0.001f, 1000);
         for (int i = 0; i < 2; i++)
@@ -236,28 +226,58 @@ public class Demo {
     }
 
     public void update(float delta) {
+        // RENDER 1
+
         rotation.x += delta * 0.11f;
         rotation.y += delta * 0.77f;
         rotation.z += delta * 0.33f;
-        model.identity().rotateXYZ(rotation).scale(0.25f).translate(-0.5f, -0.5f, -0.5f);
-
-        modelview.set(view).mul(model);
-
-        demoShader.setUniformMatrix4f("u_projection", projection);
-        demoShader.setUniformMatrix4f("u_modelview", modelview);
-        demoShader.setUniformMatrix3f("u_normal", modelview.normal(normal));
-        demoShader.setUniform3f("u_light", light.mulProject(view, lightV));
-
-        // RENDER 1
 
         glBindFramebuffer(GL_FRAMEBUFFER, hdrFB);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         demoShader.bind();
         vao.bind();
-        glDrawElements(GL_TRIANGLES, indices.limit(), GL_UNSIGNED_INT, 0);
+        demoShader.setUniformMatrix4f("u_projection", projection);
+        demoShader.setUniform3f("u_light", light.mulProject(view, lightV));
+
+        {
+            model.identity().rotateXYZ(rotation).scale(0.2f).translate(-0.5f, -0.5f, -0.5f);
+            modelview.set(view).mul(model);
+            demoShader.setUniformMatrix4f("u_modelview", modelview);
+            demoShader.setUniformMatrix3f("u_normal", modelview.normal(normal));
+            demoShader.setUniform3f("u_color", 0, 1, 0);
+            glDrawElements(GL_TRIANGLES, indices.limit(), GL_UNSIGNED_INT, 0);
+        }
+
+        {
+            model.identity().translate(0, 0.4f, 0).rotateYXZ(rotation).scale(0.1f).translate(-0.5f, -0.5f, -0.5f);
+            modelview.set(view).mul(model);
+            demoShader.setUniformMatrix4f("u_modelview", modelview);
+            demoShader.setUniformMatrix3f("u_normal", modelview.normal(normal));
+            demoShader.setUniform3f("u_color", 1, 0, 0);
+            glDrawElements(GL_TRIANGLES, indices.limit(), GL_UNSIGNED_INT, 0);
+        }
+
+        {
+            model.identity().translate(0, -0.4f, 0).rotateZYX(rotation).scale(0.1f).translate(-0.5f, -0.5f, -0.5f);
+            modelview.set(view).mul(model);
+            demoShader.setUniformMatrix4f("u_modelview", modelview);
+            demoShader.setUniformMatrix3f("u_normal", modelview.normal(normal));
+            demoShader.setUniform3f("u_color", 0, 0, 1);
+            glDrawElements(GL_TRIANGLES, indices.limit(), GL_UNSIGNED_INT, 0);
+        }
+
         vao.unbind();
         demoShader.unbind();
+
+        pixels.clear();
+        glReadPixels(width / 2, height / 2, 1, 1, GL_RGB, GL_FLOAT, pixels);
+        final float r = pixels.get();
+        final float g = pixels.get();
+        final float b = pixels.get();
+        final float brightness = r * 0.2125f + g * 0.7154f + b * 0.0721f;
+        final float newExposure = 1.0f / max(brightness, 0.3f);
+        exposure = exposure + (newExposure - exposure) * delta * 10;
 
         glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
 
@@ -282,7 +302,7 @@ public class Demo {
 
         // RENDER 2
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         glBindTexture(GL_TEXTURE_2D, colorTexture);
         glActiveTexture(GL_TEXTURE1);
@@ -290,6 +310,7 @@ public class Demo {
         blendShader.bind();
         blendShader.setUniform1i("u_color", 0);
         blendShader.setUniform1i("u_bloom", 1);
+        blendShader.setUniform1f("u_exposure", exposure);
         vao2.bind();
         ibo2.bind();
         glDrawElements(GL_TRIANGLES, indices2.limit(), GL_UNSIGNED_INT, 0);
